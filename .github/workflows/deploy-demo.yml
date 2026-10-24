@@ -1,0 +1,55 @@
+name: Despliegue demo
+
+# Demostración para la plataforma de riesgo de despliegue (proyecto de tesis).
+# Construye la imagen del contenedor y la publica en GitHub Container Registry
+# (ghcr.io) con el GITHUB_TOKEN integrado; no usa secretos adicionales.
+# Para producir fallos reales a propósito, un paso previo falla si el mensaje
+# del commit contiene "[fallo]" (push) o si simular_fallo es true (dispatch).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      simular_fallo:
+        description: "Simular un fallo antes del despliegue"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v4
+
+      - name: Comprobar condiciones previas
+        env:
+          MENSAJE: ${{ github.event.head_commit.message }}
+          SIMULAR: ${{ inputs.simular_fallo }}
+        run: |
+          if [[ "$MENSAJE" == *"[fallo]"* || "$SIMULAR" == "true" ]]; then
+            echo "Fallo simulado antes de publicar la imagen."
+            exit 1
+          fi
+          echo "Condiciones previas correctas."
+
+      - name: Iniciar sesión en ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Despliegue de la imagen en ghcr.io
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/erickterranova2004/demo-despliegue-riesgo:latest
+            ghcr.io/erickterranova2004/demo-despliegue-riesgo:${{ github.sha }}
